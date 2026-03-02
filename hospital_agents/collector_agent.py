@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # HIRA 공공 API 엔드포인트 (https://www.data.go.kr)
 HIRA_API_URL = "http://apis.data.go.kr/B551182/MadmDtlInfoService2/getDgsbjtInfo2"
+# 약국 정보 API
+PHARM_API_URL = "http://apis.data.go.kr/B551182/pharmacyInfoServicev2/getPharmBasisList"
 
 
 @dataclass
@@ -31,6 +33,7 @@ class CollectorConfig:
     max_results: int = 100            # 한 번에 수집할 최대 건수
     timeout: int = 10                 # HTTP 타임아웃 (초)
     use_dummy_data: bool = False      # API 키 없을 때 더미 데이터 사용
+    default_region: str = "대전"      # 기본 수집 지역
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +41,7 @@ class CollectorConfig:
 # ---------------------------------------------------------------------------
 
 DUMMY_HOSPITALS: list[dict] = [
+    # ── 서울 ────────────────────────────────────────────────────
     {
         "id": "H00001",
         "name": "서울대학교병원",
@@ -123,6 +127,287 @@ DUMMY_HOSPITALS: list[dict] = [
         "latitude": 37.5272,
         "longitude": 126.8699,
     },
+    # ── 대전 ────────────────────────────────────────────────────
+    {
+        "id": "H00101",
+        "name": "충남대학교병원",
+        "type": "상급종합병원",
+        "address": "대전광역시 중구 문화로 282",
+        "phone": "042-280-7114",
+        "specialties": ["내과", "외과", "소아과", "산부인과", "신경과", "응급의학과", "정형외과", "재활의학과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:30",
+            "saturday": "08:30 ~ 12:00",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3219,
+        "longitude": 127.4089,
+    },
+    {
+        "id": "H00102",
+        "name": "건양대학교병원",
+        "type": "상급종합병원",
+        "address": "대전광역시 서구 관저동로 158",
+        "phone": "042-600-9114",
+        "specialties": ["내과", "외과", "소아과", "안과", "피부과", "응급의학과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:30",
+            "saturday": "08:30 ~ 12:30",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3028,
+        "longitude": 127.3613,
+    },
+    {
+        "id": "H00103",
+        "name": "대전성모병원",
+        "type": "종합병원",
+        "address": "대전광역시 중구 대흥로 64-31",
+        "phone": "042-220-9114",
+        "specialties": ["내과", "외과", "산부인과", "소아과", "정형외과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:00",
+            "saturday": "08:30 ~ 12:00",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3259,
+        "longitude": 127.4268,
+    },
+    {
+        "id": "H00104",
+        "name": "대전을지대학교병원",
+        "type": "종합병원",
+        "address": "대전광역시 서구 둔산서로 95",
+        "phone": "042-611-3000",
+        "specialties": ["내과", "외과", "신경과", "재활의학과", "응급의학과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:30",
+            "saturday": "08:30 ~ 12:30",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3505,
+        "longitude": 127.3867,
+    },
+    {
+        "id": "H00105",
+        "name": "대전선병원",
+        "type": "종합병원",
+        "address": "대전광역시 중구 목중로 29",
+        "phone": "042-220-8114",
+        "specialties": ["내과", "외과", "정형외과", "재활의학과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:00",
+            "saturday": "08:30 ~ 12:00",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3275,
+        "longitude": 127.4219,
+    },
+    {
+        "id": "H00106",
+        "name": "유성선병원",
+        "type": "종합병원",
+        "address": "대전광역시 유성구 북유성대로 93",
+        "phone": "042-607-9999",
+        "specialties": ["내과", "외과", "소아과", "신경과"],
+        "hours": {
+            "weekday": "08:30 ~ 17:30",
+            "saturday": "08:30 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "응급실 24시간",
+        },
+        "emergency": True,
+        "latitude": 36.3825,
+        "longitude": 127.3385,
+    },
+    {
+        "id": "H00107",
+        "name": "한국한의원 (대전)",
+        "type": "한의원",
+        "address": "대전광역시 중구 중앙로 76",
+        "phone": "042-255-1234",
+        "specialties": ["한방내과", "침구과", "재활의학과"],
+        "hours": {
+            "weekday": "09:00 ~ 18:30",
+            "saturday": "09:00 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "emergency": False,
+        "latitude": 36.3272,
+        "longitude": 127.4276,
+    },
+    {
+        "id": "H00108",
+        "name": "대전둔산내과의원",
+        "type": "의원",
+        "address": "대전광역시 서구 둔산로 131",
+        "phone": "042-483-5000",
+        "specialties": ["내과", "가정의학과"],
+        "hours": {
+            "weekday": "09:00 ~ 18:00",
+            "saturday": "09:00 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "emergency": False,
+        "latitude": 36.3534,
+        "longitude": 127.3842,
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# 약국 더미 데이터 (대전 관내)
+# ---------------------------------------------------------------------------
+
+DUMMY_PHARMACIES: list[dict] = [
+    {
+        "id": "P00001",
+        "name": "충남대학교병원 원외약국",
+        "type": "약국",
+        "address": "대전광역시 중구 문화로 282",
+        "phone": "042-280-8501",
+        "handled_items": ["전문의약품", "일반의약품"],
+        "hours": {
+            "weekday": "09:00 ~ 18:00",
+            "saturday": "09:00 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": False,
+        "latitude": 36.3221,
+        "longitude": 127.4091,
+    },
+    {
+        "id": "P00002",
+        "name": "건양대병원약국",
+        "type": "약국",
+        "address": "대전광역시 서구 관저동로 158",
+        "phone": "042-600-0123",
+        "handled_items": ["전문의약품", "일반의약품"],
+        "hours": {
+            "weekday": "09:00 ~ 18:00",
+            "saturday": "09:00 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": False,
+        "latitude": 36.3030,
+        "longitude": 127.3615,
+    },
+    {
+        "id": "P00003",
+        "name": "둔산중앙약국",
+        "type": "약국",
+        "address": "대전광역시 서구 둔산중로 97",
+        "phone": "042-472-0001",
+        "handled_items": ["전문의약품", "일반의약품", "한약재"],
+        "hours": {
+            "weekday": "09:00 ~ 21:00",
+            "saturday": "09:00 ~ 18:00",
+            "sunday": "10:00 ~ 16:00",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": True,
+        "latitude": 36.3510,
+        "longitude": 127.3848,
+    },
+    {
+        "id": "P00004",
+        "name": "대전역전약국",
+        "type": "약국",
+        "address": "대전광역시 동구 중앙로 215",
+        "phone": "042-252-3456",
+        "handled_items": ["일반의약품", "건강기능식품"],
+        "hours": {
+            "weekday": "08:30 ~ 20:00",
+            "saturday": "09:00 ~ 17:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": False,
+        "latitude": 36.3318,
+        "longitude": 127.4347,
+    },
+    {
+        "id": "P00005",
+        "name": "유성온천약국",
+        "type": "약국",
+        "address": "대전광역시 유성구 유성대로 665",
+        "phone": "042-823-7890",
+        "handled_items": ["전문의약품", "일반의약품"],
+        "hours": {
+            "weekday": "09:00 ~ 19:30",
+            "saturday": "09:00 ~ 15:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": False,
+        "latitude": 36.3650,
+        "longitude": 127.3410,
+    },
+    {
+        "id": "P00006",
+        "name": "서구중앙약국",
+        "type": "약국",
+        "address": "대전광역시 서구 갈마중로 10",
+        "phone": "042-526-1122",
+        "handled_items": ["전문의약품", "일반의약품", "의료용품"],
+        "hours": {
+            "weekday": "09:00 ~ 20:00",
+            "saturday": "09:00 ~ 17:00",
+            "sunday": "10:00 ~ 14:00",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": True,
+        "latitude": 36.3492,
+        "longitude": 127.3786,
+    },
+    {
+        "id": "P00007",
+        "name": "대덕약국",
+        "type": "약국",
+        "address": "대전광역시 대덕구 대덕대로 1400",
+        "phone": "042-636-5500",
+        "handled_items": ["일반의약품", "건강기능식품"],
+        "hours": {
+            "weekday": "09:00 ~ 18:00",
+            "saturday": "09:00 ~ 13:00",
+            "sunday": "휴진",
+            "holiday": "휴진",
+        },
+        "duty_pharmacy": False,
+        "latitude": 36.3482,
+        "longitude": 127.4153,
+    },
+    {
+        "id": "P00008",
+        "name": "24시 행복약국",
+        "type": "약국",
+        "address": "대전광역시 중구 대종로 480",
+        "phone": "042-254-2424",
+        "handled_items": ["전문의약품", "일반의약품", "의료용품"],
+        "hours": {
+            "weekday": "00:00 ~ 24:00",
+            "saturday": "00:00 ~ 24:00",
+            "sunday": "00:00 ~ 24:00",
+            "holiday": "00:00 ~ 24:00",
+        },
+        "duty_pharmacy": True,
+        "latitude": 36.3298,
+        "longitude": 127.4260,
+    },
 ]
 
 
@@ -177,14 +462,50 @@ class HospitalInfoCollectorAgent:
         logger.info("[%s] 수동 등록: %s (%s)", self.name, hospital.get("name"), hid)
         return hid
 
+    def collect_pharmacies(self, region: str = "", keyword: str = "") -> list[str]:
+        """
+        약국 정보를 수집하고 저장된 pharmacy_id 목록을 반환합니다.
+
+        Args:
+            region  : 지역 필터 (예: '대전', '서구')
+            keyword : 이름·취급품목 필터
+        """
+        region = region or self.config.default_region
+        logger.info("[%s] 약국 수집 시작 (region=%s, keyword=%s)", self.name, region, keyword)
+
+        pharmacies = (
+            self._fetch_pharmacies_from_api(region)
+            if self.config.hira_api_key and not self.config.use_dummy_data
+            else self._fetch_dummy_pharmacies(region, keyword)
+        )
+
+        saved_ids = []
+        for p in pharmacies:
+            pid = self.store.save_pharmacy(p)
+            saved_ids.append(pid)
+            logger.info("[%s] 약국 저장: %s (%s)", self.name, p.get("name"), pid)
+
+        logger.info("[%s] 약국 수집 완료 — 총 %d건", self.name, len(saved_ids))
+        return saved_ids
+
+    def register_pharmacy(self, pharmacy: dict) -> str:
+        """단일 약국 정보를 직접 등록합니다."""
+        pid = self.store.save_pharmacy(pharmacy)
+        logger.info("[%s] 약국 수동 등록: %s (%s)", self.name, pharmacy.get("name"), pid)
+        return pid
+
     def run(self, **kwargs) -> dict[str, Any]:
-        """에이전트 실행 인터페이스 (오케스트레이터 호환)"""
-        ids = self.collect(**kwargs)
+        """에이전트 실행 인터페이스 — 병원 + 약국 동시 수집."""
+        region = kwargs.pop("region", self.config.default_region)
+        hosp_ids = self.collect(region=region, **kwargs)
+        pharm_ids = self.collect_pharmacies(region=region)
         return {
             "agent": self.name,
             "action": "collect",
-            "saved_ids": ids,
-            "count": len(ids),
+            "saved_ids": hosp_ids,
+            "count": len(hosp_ids),
+            "pharmacy_ids": pharm_ids,
+            "pharmacy_count": len(pharm_ids),
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -200,6 +521,57 @@ class HospitalInfoCollectorAgent:
         if specialty:
             data = [h for h in data if specialty in h.get("specialties", [])]
         return data
+
+    def _fetch_dummy_pharmacies(self, region: str, keyword: str) -> list[dict]:
+        """약국 더미 데이터에서 필터링하여 반환합니다."""
+        data = DUMMY_PHARMACIES
+        if region:
+            data = [p for p in data if region in p.get("address", "")]
+        if keyword:
+            data = [p for p in data if keyword in p.get("name", "") or
+                    any(keyword in item for item in p.get("handled_items", []))]
+        return data
+
+    def _fetch_pharmacies_from_api(self, region: str) -> list[dict]:
+        """HIRA 약국 정보 API에서 데이터를 가져옵니다."""
+        # 시도 코드 매핑 (대전: 30)
+        sido_map = {"대전": "30", "서울": "11", "부산": "21", "인천": "22",
+                    "광주": "23", "대구": "27", "울산": "31"}
+        sido_cd = sido_map.get(region, "30")
+
+        params = {
+            "serviceKey": self.config.hira_api_key,
+            "pageNo": 1,
+            "numOfRows": self.config.max_results,
+            "sidoCd": sido_cd,
+            "_type": "json",
+        }
+        try:
+            resp = requests.get(PHARM_API_URL, params=params, timeout=self.config.timeout)
+            resp.raise_for_status()
+            items = resp.json().get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if isinstance(items, dict):
+                items = [items]
+            return [self._normalize_pharm(item) for item in items]
+        except requests.RequestException as e:
+            logger.warning("[%s] 약국 API 호출 실패, 더미 데이터로 폴백: %s", self.name, e)
+            return self._fetch_dummy_pharmacies(region, "")
+
+    @staticmethod
+    def _normalize_pharm(item: dict) -> dict:
+        """HIRA 약국 API 응답을 내부 포맷으로 변환합니다."""
+        return {
+            "name": item.get("yadmNm", ""),
+            "type": "약국",
+            "address": f"{item.get('sidoNm', '')} {item.get('sgguNm', '')} {item.get('emdongNm', '')}".strip(),
+            "phone": item.get("telno", ""),
+            "handled_items": ["전문의약품", "일반의약품"],
+            "hours": {},
+            "duty_pharmacy": False,
+            "latitude": float(item.get("YPos", 0) or 0),
+            "longitude": float(item.get("XPos", 0) or 0),
+            "hira_code": item.get("ykiho", ""),
+        }
 
     def _fetch_from_api(self, region: str, specialty: str) -> list[dict]:
         """HIRA 공공 API에서 병원 정보를 가져옵니다."""

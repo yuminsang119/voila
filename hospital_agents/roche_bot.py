@@ -33,6 +33,16 @@ INTENTS: list[dict] = [
         ],
     },
     {
+        "name": "find_pharmacy",
+        "patterns": [
+            r"약국.*(찾|검색|추천|알려|어디|목록|리스트)",
+            r"(근처|주변|가까운).*약국",
+            r"약\s*(타러|사러|구하러)",
+            r"처방전.*약국",
+            r"당번\s*약국",
+        ],
+    },
+    {
         "name": "find_hospital",
         "patterns": [
             r"(병원|의원|클리닉).*(찾|검색|추천|알려)",
@@ -152,11 +162,27 @@ class RocheBot:
                 entities["hospital_id"] = h["id"]
                 break
 
+        # 약국 이름 추출
+        if "약국" in text:
+            for p in self.store.all_pharmacies():
+                pname = p.get("name", "")
+                if pname and pname in text:
+                    entities["pharmacy_name"] = pname
+                    entities["pharmacy_id"] = p["id"]
+                    break
+
         # 진료과 추출
         specialties = ["내과", "외과", "소아과", "산부인과", "정형외과", "피부과", "안과", "신경과", "재활의학과", "응급의학과", "가정의학과"]
         for sp in specialties:
             if sp in text:
                 entities["specialty"] = sp
+                break
+
+        # 지역 추출
+        regions = ["대전", "서울", "부산", "인천", "광주", "대구", "울산", "서구", "중구", "동구", "유성구", "대덕구"]
+        for region in regions:
+            if region in text:
+                entities["region"] = region
                 break
 
         return intent, entities
@@ -168,6 +194,7 @@ class RocheBot:
     def _dispatch(self, intent: str, entities: dict, raw: str) -> str:
         handler = {
             "check_open": self._handle_check_open,
+            "find_pharmacy": self._handle_find_pharmacy,
             "find_hospital": self._handle_find_hospital,
             "hospital_info": self._handle_hospital_info,
             "emergency": self._handle_emergency,
@@ -214,6 +241,35 @@ class RocheBot:
         lines = ["오늘 영업 중인 병원 목록입니다:\n"]
         for s in open_hospitals:
             lines.append(f"🏥 {s['hospital_name']} — {s['hours']} (☎ {s['phone']})")
+        return "\n".join(lines)
+
+    def _handle_find_pharmacy(self, entities: dict, raw: str) -> str:
+        region = entities.get("region", "")
+        duty_only = "당번" in raw
+
+        pharmacies = self.store.all_pharmacies()
+        if region:
+            pharmacies = [p for p in pharmacies if region in p.get("address", "")]
+        if duty_only:
+            pharmacies = [p for p in pharmacies if p.get("duty_pharmacy")]
+
+        if not pharmacies:
+            return "조건에 맞는 약국을 찾지 못했습니다."
+
+        tag = "당번약국" if duty_only else ("약국" if not region else f"{region} 약국")
+        lines = [f"💊 {tag} {len(pharmacies)}개:\n"]
+        for p in pharmacies[:6]:
+            status = self.store.get_today_pharmacy_status(p["id"])
+            open_str = "영업중" if (status and status.get("is_open")) else "영업 미확인"
+            duty_str = " 🌙당번" if p.get("duty_pharmacy") else ""
+            lines.append(
+                f"💊 {p['name']}{duty_str}\n"
+                f"   📍 {p.get('address', '')}\n"
+                f"   📞 {p.get('phone', '')}\n"
+                f"   🔖 {open_str}"
+            )
+        if len(pharmacies) > 6:
+            lines.append(f"\n... 외 {len(pharmacies)-6}건 더 있습니다.")
         return "\n".join(lines)
 
     def _handle_find_hospital(self, entities: dict, raw: str) -> str:
@@ -286,8 +342,10 @@ class RocheBot:
     def _handle_unknown(self, entities: dict, raw: str) -> str:
         return (
             "죄송합니다, 잘 이해하지 못했습니다. 다음과 같이 물어보실 수 있습니다:\n"
-            "• '오늘 서울대학교병원 영업해?'\n"
-            "• '내과 병원 찾아줘'\n"
+            "• '오늘 충남대학교병원 영업해?'\n"
+            "• '대전 내과 병원 찾아줘'\n"
             "• '응급실 운영하는 병원 알려줘'\n"
+            "• '대전 약국 찾아줘'\n"
+            "• '당번약국 알려줘'\n"
             "• '등록된 병원 목록 보여줘'"
         )

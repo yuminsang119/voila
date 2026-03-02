@@ -108,17 +108,52 @@ class DailyBusinessCheckerAgent:
         self.store.save_daily_status(hospital_id, date_str, status)
         return status
 
+    def check_all_pharmacies(self, target_date: date | None = None) -> dict[str, dict]:
+        """
+        모든 약국의 영업 상태를 체크하고 저장합니다.
+
+        Returns:
+            {pharmacy_id: status_dict} 형태의 결과
+        """
+        target = target_date or date.today()
+        date_str = target.strftime("%Y-%m-%d")
+        day_type = self._get_day_type(target)
+
+        logger.info("[%s] 약국 영업 체크 날짜: %s (%s)", self.name, date_str, day_type)
+
+        results: dict[str, dict] = {}
+        for pharmacy in self.store.all_pharmacies():
+            pid = pharmacy["id"]
+            status = self._compute_pharmacy_status(pharmacy, day_type)
+            self.store.save_pharmacy_status(pid, date_str, status)
+            results[pid] = status
+            logger.info(
+                "[%s] %s → %s (%s)",
+                self.name,
+                pharmacy.get("name"),
+                "영업" if status["is_open"] else "휴무",
+                status.get("hours", ""),
+            )
+
+        logger.info("[%s] 약국 체크 완료 — 총 %d건", self.name, len(results))
+        return results
+
     def run(self, **kwargs) -> dict[str, Any]:
-        """에이전트 실행 인터페이스 (오케스트레이터 호환)"""
-        results = self.check_all(**kwargs)
-        open_count = sum(1 for s in results.values() if s.get("is_open"))
+        """에이전트 실행 인터페이스 — 병원·약국 동시 체크."""
+        hosp_results = self.check_all(**kwargs)
+        pharm_results = self.check_all_pharmacies()
+        open_hosp = sum(1 for s in hosp_results.values() if s.get("is_open"))
+        open_pharm = sum(1 for s in pharm_results.values() if s.get("is_open"))
         return {
             "agent": self.name,
             "action": "check_all",
             "date": date.today().isoformat(),
-            "total": len(results),
-            "open": open_count,
-            "closed": len(results) - open_count,
+            "total": len(hosp_results),
+            "open": open_hosp,
+            "closed": len(hosp_results) - open_hosp,
+            "pharmacy_total": len(pharm_results),
+            "pharmacy_open": open_pharm,
+            "pharmacy_closed": len(pharm_results) - open_pharm,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -151,6 +186,29 @@ class DailyBusinessCheckerAgent:
             "hours": raw_hours,
             "emergency": emergency,
             "phone": hospital.get("phone", ""),
+        }
+
+    def _compute_pharmacy_status(self, pharmacy: dict, day_type: str) -> dict:
+        """약국 영업 상태를 계산합니다."""
+        hours_info = pharmacy.get("hours", {})
+        raw_hours = hours_info.get(day_type, "휴무")
+
+        is_open = raw_hours not in ("휴무", "휴진", "", None)
+        duty = pharmacy.get("duty_pharmacy", False)
+
+        # 당번약국은 공휴일에도 운영
+        if not is_open and duty and day_type in ("sunday", "holiday"):
+            is_open = True
+            raw_hours = "당번약국 운영"
+
+        return {
+            "pharmacy_id": pharmacy["id"],
+            "pharmacy_name": pharmacy.get("name", ""),
+            "day_type": day_type,
+            "is_open": is_open,
+            "hours": raw_hours,
+            "duty_pharmacy": duty,
+            "phone": pharmacy.get("phone", ""),
         }
 
     # ------------------------------------------------------------------
