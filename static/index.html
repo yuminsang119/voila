@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>대전 병원·약국 찾기</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Noto Sans KR', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+    }
+
+    header {
+      background: linear-gradient(135deg, #2b6cb0, #3182ce);
+      color: white;
+      padding: 20px 16px 16px;
+      text-align: center;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header p  { font-size: 0.82rem; margin-top: 4px; opacity: .85; }
+
+    /* 버튼 행 */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      padding: 16px;
+    }
+    .btn-kind {
+      flex: 1;
+      padding: 14px 8px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-kind:active { opacity: .7; }
+    .btn-hospital { background: #ebf8ff; color: #2b6cb0; }
+    .btn-pharmacy { background: #f0fff4; color: #276749; }
+
+    /* 반경 선택 */
+    .radius-row {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px 12px;
+      overflow-x: auto;
+    }
+    .radius-row button {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #cbd5e0;
+      background: white;
+      font-size: 0.82rem;
+      cursor: pointer;
+      color: #4a5568;
+    }
+    .radius-row button.active {
+      border-color: #3182ce;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      font-weight: 600;
+    }
+
+    /* 상태 메시지 */
+    #status {
+      text-align: center;
+      padding: 10px 16px;
+      font-size: 0.88rem;
+      color: #718096;
+      min-height: 36px;
+    }
+    #status.error { color: #c53030; }
+
+    /* 결과 카드 */
+    #results { padding: 0 16px 32px; }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #718096;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      margin: 4px 0 10px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .card-name {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-open   { background: #c6f6d5; color: #276749; }
+    .badge-closed { background: #fed7d7; color: #9b2c2c; }
+    .badge-emg    { background: #fed7d7; color: #9b2c2c; margin-right: 4px; }
+    .badge-duty   { background: #fefcbf; color: #744210; margin-right: 4px; }
+
+    .card-meta {
+      font-size: 0.82rem;
+      color: #4a5568;
+      line-height: 1.6;
+    }
+    .card-meta span { display: block; }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .card-actions a {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity .15s;
+    }
+    .card-actions a:active { opacity: .7; }
+    .btn-map  { background: #ebf8ff; color: #2b6cb0; }
+    .btn-call { background: #f0fff4; color: #276749; }
+
+    .dist-badge {
+      font-size: 0.75rem;
+      color: #a0aec0;
+      margin-left: 6px;
+      font-weight: 400;
+    }
+
+    .empty-msg {
+      text-align: center;
+      padding: 40px 16px;
+      color: #a0aec0;
+      font-size: 0.9rem;
+    }
+
+    /* 로딩 스피너 */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid #bee3f8;
+      border-top-color: #3182ce;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏥 대전 병원·약국 찾기</h1>
+  <p>현재 위치 기준으로 가까운 순서로 안내합니다</p>
+</header>
+
+<!-- 반경 선택 -->
+<div class="radius-row" id="radiusBtns">
+  <button onclick="setRadius(1)" class="">1 km</button>
+  <button onclick="setRadius(3)" class="active">3 km</button>
+  <button onclick="setRadius(5)" class="">5 km</button>
+  <button onclick="setRadius(10)" class="">10 km</button>
+</div>
+
+<!-- 검색 버튼 -->
+<div class="btn-row">
+  <button class="btn-kind btn-hospital" onclick="search('hospital')">🏥 병원 찾기</button>
+  <button class="btn-kind btn-pharmacy" onclick="search('pharmacy')">💊 약국 찾기</button>
+</div>
+
+<div id="status">위치 허용 후 병원이나 약국을 선택하세요</div>
+<div id="results"></div>
+
+<script>
+  let radiusKm = 3;
+
+  function setRadius(km) {
+    radiusKm = km;
+    document.querySelectorAll('.radius-row button').forEach(b => {
+      b.classList.toggle('active', b.textContent.trim() === km + ' km');
+    });
+  }
+
+  function setStatus(msg, isError) {
+    const el = document.getElementById('status');
+    el.innerHTML = msg;
+    el.className = isError ? 'error' : '';
+  }
+
+  function search(kind) {
+    setStatus('<span class="spinner"></span>위치 정보를 가져오는 중...', false);
+    document.getElementById('results').innerHTML = '';
+
+    if (!navigator.geolocation) {
+      setStatus('이 브라우저는 위치 서비스를 지원하지 않습니다.', true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      pos => fetchNearby(pos.coords.latitude, pos.coords.longitude, kind),
+      err => {
+        const msgs = {
+          1: '위치 허용을 거부하셨습니다. 브라우저 설정에서 허용해 주세요.',
+          2: '위치를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          3: '위치 요청 시간이 초과되었습니다.',
+        };
+        setStatus(msgs[err.code] || '알 수 없는 오류가 발생했습니다.', true);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  async function fetchNearby(lat, lon, kind) {
+    const kindLabel = kind === 'hospital' ? '병원' : '약국';
+    setStatus(`<span class="spinner"></span>반경 ${radiusKm}km 이내 ${kindLabel} 검색 중...`, false);
+
+    try {
+      const res = await fetch(`/api/nearby?lat=${lat}&lon=${lon}&kind=${kind}&radius=${radiusKm}`);
+      const data = await res.json();
+      renderResults(data, kindLabel);
+    } catch (e) {
+      setStatus('서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.', true);
+    }
+  }
+
+  function renderResults(data, kindLabel) {
+    const container = document.getElementById('results');
+
+    if (!data.items || data.items.length === 0) {
+      setStatus('', false);
+      container.innerHTML = `<div class="empty-msg">반경 ${radiusKm}km 이내에<br>${kindLabel}이 없습니다.<br><br>반경을 넓혀서 다시 검색해 보세요.</div>`;
+      return;
+    }
+
+    setStatus('', false);
+    container.innerHTML = `<p class="section-title">${kindLabel} ${data.items.length}건 (가까운 순)</p>`;
+
+    data.items.forEach(item => {
+      const openBadge = item.is_open
+        ? '<span class="badge badge-open">✅ 영업중</span>'
+        : '<span class="badge badge-closed">❌ 휴진</span>';
+
+      const emgBadge = item.emergency ? '<span class="badge badge-emg">🚨응급</span>' : '';
+      const dutyBadge = item.duty_pharmacy ? '<span class="badge badge-duty">🌙당번</span>' : '';
+
+      const mapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(item.name)},${item.latitude},${item.longitude}`;
+      const callUrl = item.phone ? `tel:${item.phone.replace(/-/g, '')}` : '#';
+
+      const actBtns = `
+        <div class="card-actions">
+          ${item.latitude ? `<a href="${mapUrl}" target="_blank" class="btn-map">🗺 지도 보기</a>` : ''}
+          ${item.phone ? `<a href="${callUrl}" class="btn-call">📞 전화하기</a>` : ''}
+        </div>`;
+
+      container.innerHTML += `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-name">${item.name}<span class="dist-badge">${item.dist_km} km</span></div>
+            <div>${emgBadge}${dutyBadge}${openBadge}</div>
+          </div>
+          <div class="card-meta">
+            <span>📍 ${item.address || '-'}</span>
+            <span>⏰ ${item.hours || '-'}</span>
+            ${item.phone ? `<span>📞 ${item.phone}</span>` : ''}
+          </div>
+          ${(item.latitude || item.phone) ? actBtns : ''}
+        </div>`;
+    });
+  }
+</script>
+</body>
+</html>
