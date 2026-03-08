@@ -2,125 +2,197 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>대전 병원·약국 찾기</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, 'Noto Sans KR', sans-serif; overflow: hidden; height: 100dvh; }
 
-    body {
-      font-family: -apple-system, 'Noto Sans KR', sans-serif;
-      background: #f0f4f8;
-      color: #1a202c;
+    /* ── 지도 (전체 화면) ─────────────────────────── */
+    #map {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
     }
 
+    /* ── 헤더 ────────────────────────────────────── */
     header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      z-index: 200;
       background: linear-gradient(135deg, #2b6cb0, #3182ce);
       color: white;
-      padding: 20px 16px 16px;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
     }
-    header h1 { font-size: 1.3rem; font-weight: 700; }
-    header p  { font-size: 0.82rem; margin-top: 4px; opacity: .85; }
+    header h1 { font-size: 1.05rem; font-weight: 700; }
 
-    /* 버튼 행 */
+    /* ── 검색 패널 (헤더 바로 아래 고정) ─────────── */
+    .search-panel {
+      position: fixed;
+      top: 52px; left: 0; right: 0;
+      z-index: 200;
+      padding: 10px 12px 8px;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 12px rgba(0,0,0,.12);
+    }
     .btn-row {
       display: flex;
-      gap: 10px;
-      padding: 16px;
+      gap: 8px;
+      margin-bottom: 8px;
     }
     .btn-kind {
       flex: 1;
-      padding: 14px 8px;
+      padding: 11px 8px;
       border: none;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 600;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
       cursor: pointer;
-      transition: opacity .15s;
+      transition: transform .1s;
     }
-    .btn-kind:active { opacity: .7; }
+    .btn-kind:active { transform: scale(.97); }
     .btn-hospital { background: #ebf8ff; color: #2b6cb0; }
     .btn-pharmacy { background: #f0fff4; color: #276749; }
 
-    /* 반경 선택 */
     .radius-row {
       display: flex;
-      gap: 8px;
-      padding: 0 16px 12px;
+      gap: 6px;
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .radius-row::-webkit-scrollbar { display: none; }
     .radius-row button {
       flex-shrink: 0;
-      padding: 6px 14px;
+      padding: 5px 13px;
       border-radius: 20px;
       border: 1.5px solid #cbd5e0;
       background: white;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       cursor: pointer;
       color: #4a5568;
+      transition: all .15s;
     }
     .radius-row button.active {
       border-color: #3182ce;
       background: #ebf8ff;
       color: #2b6cb0;
-      font-weight: 600;
-    }
-
-    /* 상태 메시지 */
-    #status {
-      text-align: center;
-      padding: 10px 16px;
-      font-size: 0.88rem;
-      color: #718096;
-      min-height: 36px;
-    }
-    #status.error { color: #c53030; }
-
-    /* 결과 카드 */
-    #results { padding: 0 16px 32px; }
-
-    .section-title {
-      font-size: 0.78rem;
       font-weight: 700;
-      color: #718096;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      margin: 4px 0 10px;
     }
 
-    .card {
+    /* ── 바텀시트 ─────────────────────────────────── */
+    .bottom-sheet {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 300;
       background: white;
-      border-radius: 14px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
-    }
-    .card-header {
+      border-radius: 22px 22px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.18);
+      max-height: 68vh;
       display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: transform;
+    }
+    .bottom-sheet.open {
+      transform: translateY(0);
+    }
+    /* 드래그 핸들 */
+    .sheet-handle {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
       align-items: center;
+      height: 28px;
+      cursor: grab;
+      touch-action: none;
+    }
+    .sheet-handle::before {
+      content: '';
+      width: 40px; height: 4px;
+      background: #cbd5e0;
+      border-radius: 2px;
+    }
+    .sheet-top {
+      flex-shrink: 0;
+      padding: 0 16px 10px;
+      display: flex;
+      align-items: baseline;
       justify-content: space-between;
+    }
+    .sheet-title { font-size: 1rem; font-weight: 700; color: #1a202c; }
+    .sheet-sub   { font-size: 0.78rem; color: #718096; }
+
+    /* 카드 스크롤 영역 */
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 2px 14px 32px;
+    }
+
+    /* ── 카드 ─────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 13px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.05);
+      cursor: pointer;
+      transition: border-color .2s, box-shadow .2s;
+      animation: cardUp 0.3s ease both;
+    }
+    .card.highlight {
+      border-color: #3182ce;
+      box-shadow: 0 0 0 3px #bee3f8;
+    }
+    @keyframes cardUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
       margin-bottom: 6px;
     }
     .card-name {
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.95rem;
+      color: #1a202c;
+      line-height: 1.3;
     }
+    .dist-badge {
+      font-size: 0.7rem;
+      color: #a0aec0;
+      font-weight: 400;
+      margin-left: 4px;
+    }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
     .badge {
-      font-size: 0.72rem;
-      padding: 3px 8px;
+      font-size: 0.68rem;
+      padding: 2px 7px;
       border-radius: 20px;
-      font-weight: 600;
-      white-space: nowrap;
+      font-weight: 700;
     }
     .badge-open   { background: #c6f6d5; color: #276749; }
     .badge-closed { background: #fed7d7; color: #9b2c2c; }
-    .badge-emg    { background: #fed7d7; color: #9b2c2c; margin-right: 4px; }
-    .badge-duty   { background: #fefcbf; color: #744210; margin-right: 4px; }
+    .badge-emg    { background: #fed7d7; color: #9b2c2c; }
+    .badge-duty   { background: #fefcbf; color: #744210; }
 
     .card-meta {
-      font-size: 0.82rem;
+      font-size: 0.79rem;
       color: #4a5568;
-      line-height: 1.6;
+      line-height: 1.7;
     }
     .card-meta span { display: block; }
 
@@ -134,8 +206,8 @@
       text-align: center;
       padding: 8px;
       border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 600;
+      font-size: 0.79rem;
+      font-weight: 700;
       text-decoration: none;
       transition: opacity .15s;
     }
@@ -143,154 +215,337 @@
     .btn-map  { background: #ebf8ff; color: #2b6cb0; }
     .btn-call { background: #f0fff4; color: #276749; }
 
-    .dist-badge {
-      font-size: 0.75rem;
-      color: #a0aec0;
-      margin-left: 6px;
-      font-weight: 400;
+    /* ── 토스트 메시지 ─────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(26,32,44,.9);
+      color: white;
+      padding: 9px 18px;
+      border-radius: 22px;
+      font-size: 0.84rem;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 500;
+      white-space: nowrap;
+      max-width: 90vw;
+      transition: opacity .25s, transform .25s;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
-    .empty-msg {
-      text-align: center;
-      padding: 40px 16px;
-      color: #a0aec0;
-      font-size: 0.9rem;
-    }
-
-    /* 로딩 스피너 */
+    /* ── 스피너 ───────────────────────────────────── */
     .spinner {
       display: inline-block;
-      width: 18px; height: 18px;
-      border: 2px solid #bee3f8;
-      border-top-color: #3182ce;
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: white;
       border-radius: 50%;
       animation: spin .7s linear infinite;
       vertical-align: middle;
-      margin-right: 6px;
+      margin-right: 5px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 내 위치 마커 ─────────────────────────────── */
+    .my-dot {
+      width: 16px; height: 16px;
+      background: #3182ce;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(49,130,206,.35), 0 2px 6px rgba(0,0,0,.4);
+    }
+
+    /* ── 핀 마커 ─────────────────────────────────── */
+    .pin-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .pin-circle {
+      width: 32px; height: 32px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,.35);
+    }
+    .pin-emoji {
+      transform: rotate(45deg);
+      font-size: 14px;
+      line-height: 1;
+    }
+    .pin-tail {
+      width: 2px; height: 6px;
+      background: inherit;
+      margin-top: -1px;
+    }
   </style>
 </head>
 <body>
 
+<div id="map"></div>
+
 <header>
   <h1>🏥 대전 병원·약국 찾기</h1>
-  <p>현재 위치 기준으로 가까운 순서로 안내합니다</p>
 </header>
 
-<!-- 반경 선택 -->
-<div class="radius-row" id="radiusBtns">
-  <button onclick="setRadius(1)" class="">1 km</button>
-  <button onclick="setRadius(3)" class="active">3 km</button>
-  <button onclick="setRadius(5)" class="">5 km</button>
-  <button onclick="setRadius(10)" class="">10 km</button>
+<div class="search-panel">
+  <div class="btn-row">
+    <button class="btn-kind btn-hospital" onclick="search('hospital')">🏥 병원 찾기</button>
+    <button class="btn-kind btn-pharmacy" onclick="search('pharmacy')">💊 약국 찾기</button>
+  </div>
+  <div class="radius-row" id="radiusBtns">
+    <button onclick="setRadius(1)">1 km</button>
+    <button onclick="setRadius(3)" class="active">3 km</button>
+    <button onclick="setRadius(5)">5 km</button>
+    <button onclick="setRadius(10)">10 km</button>
+  </div>
 </div>
 
-<!-- 검색 버튼 -->
-<div class="btn-row">
-  <button class="btn-kind btn-hospital" onclick="search('hospital')">🏥 병원 찾기</button>
-  <button class="btn-kind btn-pharmacy" onclick="search('pharmacy')">💊 약국 찾기</button>
+<!-- 바텀시트 -->
+<div class="bottom-sheet" id="sheet">
+  <div class="sheet-handle" id="sheetHandle"></div>
+  <div class="sheet-top">
+    <span class="sheet-title" id="sheetTitle">검색 결과</span>
+    <span class="sheet-sub"   id="sheetSub"></span>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
 </div>
 
-<div id="status">위치 허용 후 병원이나 약국을 선택하세요</div>
-<div id="results"></div>
+<div id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  let radiusKm = 3;
+// ── 지도 초기화 ────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false })
+              .setView([36.3504, 127.3845], 13);
 
-  function setRadius(km) {
-    radiusKm = km;
-    document.querySelectorAll('.radius-row button').forEach(b => {
-      b.classList.toggle('active', b.textContent.trim() === km + ' km');
-    });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap',
+  maxZoom: 19,
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// ── 상태 ───────────────────────────────────────────────────────────────
+let radiusKm   = 3;
+let myMarker   = null;
+let markers    = {};   // cardIndex → L.Marker
+let toastTimer = null;
+
+// ── 토스트 ────────────────────────────────────────────────────────────
+function toast(msg, ms = 2600) {
+  const el = document.getElementById('toast');
+  el.innerHTML = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ── 반경 선택 ─────────────────────────────────────────────────────────
+function setRadius(km) {
+  radiusKm = km;
+  document.querySelectorAll('#radiusBtns button').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === km + ' km')
+  );
+}
+
+// ── 바텀시트 토글 ─────────────────────────────────────────────────────
+const sheet = document.getElementById('sheet');
+function openSheet()  { sheet.classList.add('open'); }
+function closeSheet() { sheet.classList.remove('open'); }
+
+// 드래그 내려서 닫기
+(function () {
+  const handle = document.getElementById('sheetHandle');
+  let startY = 0, dragging = false;
+
+  handle.addEventListener('touchstart', e => {
+    dragging = true;
+    startY = e.touches[0].clientY;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 0) sheet.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+    const dy = e.changedTouches[0].clientY - startY;
+    sheet.style.transform = '';
+    if (dy > 80) closeSheet();
+  });
+})();
+
+// ── 지도 핀 아이콘 생성 ───────────────────────────────────────────────
+function makePin(bg, emoji) {
+  const html = `
+    <div class="pin-wrap">
+      <div class="pin-circle" style="background:${bg}">
+        <span class="pin-emoji">${emoji}</span>
+      </div>
+    </div>`;
+  return L.divIcon({
+    className: '',
+    html,
+    iconSize:   [32, 38],
+    iconAnchor: [16, 38],
+    popupAnchor:[0, -40],
+  });
+}
+
+// ── 검색 ─────────────────────────────────────────────────────────────
+function search(kind) {
+  toast('<span class="spinner"></span>위치 정보를 가져오는 중...', 10000);
+
+  if (!navigator.geolocation) {
+    toast('⚠️ 위치 서비스를 지원하지 않는 브라우저입니다.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => fetchNearby(pos.coords.latitude, pos.coords.longitude, kind),
+    err => {
+      const m = {
+        1: '⚠️ 위치 허용을 거부하셨습니다. 브라우저 설정에서 허용해 주세요.',
+        2: '⚠️ 위치를 가져오지 못했습니다.',
+        3: '⚠️ 위치 요청 시간이 초과되었습니다.',
+      };
+      toast(m[err.code] || '⚠️ 알 수 없는 오류');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
+
+async function fetchNearby(lat, lon, kind) {
+  const label = kind === 'hospital' ? '병원' : '약국';
+  toast(`<span class="spinner"></span>반경 ${radiusKm}km ${label} 검색 중...`, 10000);
+
+  // 내 위치 마커
+  if (myMarker) map.removeLayer(myMarker);
+  myMarker = L.marker([lat, lon], {
+    icon: L.divIcon({ className: '', html: '<div class="my-dot"></div>', iconSize: [16,16], iconAnchor: [8,8] }),
+  }).addTo(map).bindPopup('📍 현재 위치');
+
+  try {
+    const res  = await fetch(`/api/nearby?lat=${lat}&lon=${lon}&kind=${kind}&radius=${radiusKm}`);
+    const data = await res.json();
+    render(data, label, lat, lon);
+  } catch {
+    toast('⚠️ 서버 연결 실패. 잠시 후 다시 시도해 주세요.');
+  }
+}
+
+// ── 렌더링 ─────────────────────────────────────────────────────────────
+function render(data, label, myLat, myLon) {
+  // 이전 마커 제거
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+
+  if (!data.items || data.items.length === 0) {
+    toast(`반경 ${radiusKm}km 이내에 ${label}이 없습니다. 반경을 넓혀보세요.`);
+    closeSheet();
+    return;
   }
 
-  function setStatus(msg, isError) {
-    const el = document.getElementById('status');
-    el.innerHTML = msg;
-    el.className = isError ? 'error' : '';
-  }
+  const isHosp = label === '병원';
+  document.getElementById('sheetTitle').textContent = `${label} ${data.items.length}건`;
+  document.getElementById('sheetSub').textContent   = `가까운 순 · 반경 ${radiusKm}km`;
 
-  function search(kind) {
-    setStatus('<span class="spinner"></span>위치 정보를 가져오는 중...', false);
-    document.getElementById('results').innerHTML = '';
+  const body   = document.getElementById('sheetBody');
+  body.innerHTML = '';
+  const bounds = [[myLat, myLon]];
 
-    if (!navigator.geolocation) {
-      setStatus('이 브라우저는 위치 서비스를 지원하지 않습니다.', true);
-      return;
+  data.items.forEach((item, i) => {
+    const color = item.is_open
+      ? (isHosp ? '#3182ce' : '#38a169')
+      : '#a0aec0';
+    const emoji = isHosp ? '🏥' : '💊';
+
+    // ── 지도 핀 ────────────────────────────────────────────────
+    if (item.latitude && item.longitude) {
+      const mk = L.marker([item.latitude, item.longitude], { icon: makePin(color, emoji) })
+        .addTo(map)
+        .bindPopup(`<b>${item.name}</b><br>${item.dist_km} km`);
+
+      mk.on('click', () => scrollToCard(i));
+      markers[i] = mk;
+      bounds.push([item.latitude, item.longitude]);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      pos => fetchNearby(pos.coords.latitude, pos.coords.longitude, kind),
-      err => {
-        const msgs = {
-          1: '위치 허용을 거부하셨습니다. 브라우저 설정에서 허용해 주세요.',
-          2: '위치를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.',
-          3: '위치 요청 시간이 초과되었습니다.',
-        };
-        setStatus(msgs[err.code] || '알 수 없는 오류가 발생했습니다.', true);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  }
+    // ── 카드 ──────────────────────────────────────────────────
+    const openBadge = item.is_open
+      ? '<span class="badge badge-open">✅ 영업중</span>'
+      : '<span class="badge badge-closed">❌ 휴진</span>';
+    const emgBadge  = item.emergency      ? '<span class="badge badge-emg">🚨응급</span>'  : '';
+    const dutyBadge = item.duty_pharmacy  ? '<span class="badge badge-duty">🌙당번</span>' : '';
 
-  async function fetchNearby(lat, lon, kind) {
-    const kindLabel = kind === 'hospital' ? '병원' : '약국';
-    setStatus(`<span class="spinner"></span>반경 ${radiusKm}km 이내 ${kindLabel} 검색 중...`, false);
+    const mapUrl  = `https://map.kakao.com/link/map/${encodeURIComponent(item.name)},${item.latitude},${item.longitude}`;
+    const callUrl = item.phone ? `tel:${item.phone.replace(/-/g, '')}` : '#';
 
-    try {
-      const res = await fetch(`/api/nearby?lat=${lat}&lon=${lon}&kind=${kind}&radius=${radiusKm}`);
-      const data = await res.json();
-      renderResults(data, kindLabel);
-    } catch (e) {
-      setStatus('서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.', true);
-    }
-  }
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `card-${i}`;
+    card.style.animationDelay = `${i * 45}ms`;
+    card.innerHTML = `
+      <div class="card-top">
+        <div>
+          <div class="card-name">${item.name}<span class="dist-badge">${item.dist_km} km</span></div>
+          <div class="badge-row">${emgBadge}${dutyBadge}${openBadge}</div>
+        </div>
+      </div>
+      <div class="card-meta">
+        <span>📍 ${item.address || '-'}</span>
+        <span>⏰ ${item.hours || '-'}</span>
+        ${item.phone ? `<span>📞 ${item.phone}</span>` : ''}
+      </div>
+      ${(item.latitude || item.phone) ? `
+      <div class="card-actions">
+        ${item.latitude ? `<a href="${mapUrl}" target="_blank" class="btn-map" onclick="event.stopPropagation()">🗺 지도 보기</a>` : ''}
+        ${item.phone    ? `<a href="${callUrl}" class="btn-call" onclick="event.stopPropagation()">📞 전화하기</a>` : ''}
+      </div>` : ''}`;
 
-  function renderResults(data, kindLabel) {
-    const container = document.getElementById('results');
+    // 카드 탭 → 지도에서 해당 위치로 이동
+    card.addEventListener('click', () => flyTo(i, item));
+    body.appendChild(card);
+  });
 
-    if (!data.items || data.items.length === 0) {
-      setStatus('', false);
-      container.innerHTML = `<div class="empty-msg">반경 ${radiusKm}km 이내에<br>${kindLabel}이 없습니다.<br><br>반경을 넓혀서 다시 검색해 보세요.</div>`;
-      return;
-    }
+  // 결과 전체가 보이도록 지도 범위 조정
+  map.fitBounds(bounds, { padding: [70, 70], maxZoom: 15 });
 
-    setStatus('', false);
-    container.innerHTML = `<p class="section-title">${kindLabel} ${data.items.length}건 (가까운 순)</p>`;
+  // 바텀시트 슬라이드 업
+  setTimeout(openSheet, 120);
+  toast(`${data.items.length}개 ${label}을 찾았어요!`);
+}
 
-    data.items.forEach(item => {
-      const openBadge = item.is_open
-        ? '<span class="badge badge-open">✅ 영업중</span>'
-        : '<span class="badge badge-closed">❌ 휴진</span>';
+// ── 카드 → 지도 포커스 ───────────────────────────────────────────────
+function flyTo(i, item) {
+  if (!item.latitude || !item.longitude) return;
+  map.flyTo([item.latitude, item.longitude], 17, { duration: 0.7 });
+  setTimeout(() => markers[i] && markers[i].openPopup(), 750);
+}
 
-      const emgBadge = item.emergency ? '<span class="badge badge-emg">🚨응급</span>' : '';
-      const dutyBadge = item.duty_pharmacy ? '<span class="badge badge-duty">🌙당번</span>' : '';
-
-      const mapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(item.name)},${item.latitude},${item.longitude}`;
-      const callUrl = item.phone ? `tel:${item.phone.replace(/-/g, '')}` : '#';
-
-      const actBtns = `
-        <div class="card-actions">
-          ${item.latitude ? `<a href="${mapUrl}" target="_blank" class="btn-map">🗺 지도 보기</a>` : ''}
-          ${item.phone ? `<a href="${callUrl}" class="btn-call">📞 전화하기</a>` : ''}
-        </div>`;
-
-      container.innerHTML += `
-        <div class="card">
-          <div class="card-header">
-            <div class="card-name">${item.name}<span class="dist-badge">${item.dist_km} km</span></div>
-            <div>${emgBadge}${dutyBadge}${openBadge}</div>
-          </div>
-          <div class="card-meta">
-            <span>📍 ${item.address || '-'}</span>
-            <span>⏰ ${item.hours || '-'}</span>
-            ${item.phone ? `<span>📞 ${item.phone}</span>` : ''}
-          </div>
-          ${(item.latitude || item.phone) ? actBtns : ''}
-        </div>`;
-    });
-  }
+// ── 지도 핀 클릭 → 카드 스크롤 ─────────────────────────────────────
+function scrollToCard(i) {
+  const card = document.getElementById(`card-${i}`);
+  if (!card) return;
+  openSheet();
+  setTimeout(() => {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('highlight');
+    setTimeout(() => card.classList.remove('highlight'), 1400);
+  }, 150);
+}
 </script>
 </body>
 </html>
