@@ -77,6 +77,22 @@ INTENTS: list[dict] = [
             r"등록된\s*병원",
         ],
     },
+    {
+        "name": "find_by_equipment",
+        "patterns": [
+            r"(MRI|CT|PET|초음파|내시경|맘모그래피|X-ray|엑스레이|방사선|심혈관조영|체열진단).*(있는|가능|검사|되는)",
+            r"(의료|검사)\s*(장비|기기)",
+            r"장비\s*(보유|있는|검색)",
+        ],
+    },
+    {
+        "name": "find_by_specialist",
+        "patterns": [
+            r"전문의\s*(있는|몇\s*명|수|검색)",
+            r"(내과|외과|정형외과|소아과|산부인과|피부과|안과|신경과|재활의학과|응급의학과|가정의학과).*(전문의|의사|몇\s*명)",
+            r"전문의\s*(내과|외과|정형외과|소아과)",
+        ],
+    },
 ]
 
 
@@ -171,6 +187,13 @@ class RocheBot:
                     entities["pharmacy_id"] = p["id"]
                     break
 
+        # 장비 추출
+        equip_keywords = ["MRI", "CT", "PET-CT", "초음파", "내시경", "맘모그래피", "X-ray", "엑스레이", "심혈관조영술", "방사선치료기", "체열진단기"]
+        for eq in equip_keywords:
+            if eq in text or eq.replace("-", "") in text:
+                entities["equipment"] = eq
+                break
+
         # 진료과 추출
         specialties = ["내과", "외과", "소아과", "산부인과", "정형외과", "피부과", "안과", "신경과", "재활의학과", "응급의학과", "가정의학과"]
         for sp in specialties:
@@ -199,6 +222,8 @@ class RocheBot:
             "hospital_info": self._handle_hospital_info,
             "emergency": self._handle_emergency,
             "list_hospitals": self._handle_list_hospitals,
+            "find_by_equipment": self._handle_find_by_equipment,
+            "find_by_specialist": self._handle_find_by_specialist,
             "unknown": self._handle_unknown,
         }.get(intent, self._handle_unknown)
         return handler(entities, raw)
@@ -306,12 +331,17 @@ class RocheBot:
         hours = h.get("hours", {})
         hours_str = "\n".join(f"   {k}: {v}" for k, v in hours.items()) if hours else "   정보 없음"
         specialties_str = ", ".join(h.get("specialties", [])) or "정보 없음"
+        equipment_str = ", ".join(h.get("equipment", [])) or "정보 없음"
+        specialists = h.get("specialists", {})
+        specialists_str = ", ".join(f"{sp} {cnt}명" for sp, cnt in specialists.items()) or "정보 없음"
 
         return (
             f"🏥 {h.get('name')} ({h.get('type', '')})\n"
             f"📍 주소: {h.get('address', '정보 없음')}\n"
             f"📞 전화: {h.get('phone', '정보 없음')}\n"
             f"🔬 진료과: {specialties_str}\n"
+            f"👨‍⚕️ 전문의: {specialists_str}\n"
+            f"🩻 보유 장비: {equipment_str}\n"
             f"🕐 진료 시간:\n{hours_str}\n"
             f"🚨 응급실: {'있음' if h.get('emergency') else '없음'}"
         )
@@ -339,6 +369,52 @@ class RocheBot:
             lines.append(f"... 외 {len(hospitals)-10}개")
         return "\n".join(lines)
 
+    def _handle_find_by_equipment(self, entities: dict, raw: str) -> str:
+        equip = entities.get("equipment", "")
+        results = [
+            h for h in self.store.all_hospitals()
+            if any(equip.lower() in e.lower() for e in h.get("equipment", []))
+        ] if equip else []
+
+        if not equip:
+            return "어떤 장비를 찾으세요? (예: 'MRI 있는 병원', 'CT 검사 가능한 병원')"
+        if not results:
+            return f"'{equip}' 장비를 보유한 병원을 찾지 못했습니다."
+
+        lines = [f"🩻 {equip} 보유 병원 {len(results)}개:\n"]
+        for h in results[:5]:
+            eq_list = ", ".join(h.get("equipment", []))
+            lines.append(
+                f"🏥 {h['name']} ({h.get('type', '')})\n"
+                f"   📍 {h.get('address', '')}\n"
+                f"   📞 {h.get('phone', '')}\n"
+                f"   🩻 장비: {eq_list}"
+            )
+        return "\n".join(lines)
+
+    def _handle_find_by_specialist(self, entities: dict, raw: str) -> str:
+        specialty = entities.get("specialty", "")
+        results = [
+            (h, h.get("specialists", {}).get(specialty, 0))
+            for h in self.store.all_hospitals()
+            if specialty and h.get("specialists", {}).get(specialty, 0) > 0
+        ]
+        results.sort(key=lambda x: x[1], reverse=True)
+
+        if not specialty:
+            return "어떤 전문의를 찾으세요? (예: '내과 전문의 있는 병원', '정형외과 전문의 몇 명')"
+        if not results:
+            return f"'{specialty}' 전문의 정보가 있는 병원을 찾지 못했습니다."
+
+        lines = [f"👨‍⚕️ {specialty} 전문의 보유 병원 {len(results)}개 (많은 순):\n"]
+        for h, cnt in results[:5]:
+            lines.append(
+                f"🏥 {h['name']} ({h.get('type', '')})\n"
+                f"   👨‍⚕️ {specialty} 전문의 {cnt}명\n"
+                f"   📞 {h.get('phone', '')}"
+            )
+        return "\n".join(lines)
+
     def _handle_unknown(self, entities: dict, raw: str) -> str:
         return (
             "죄송합니다, 잘 이해하지 못했습니다. 다음과 같이 물어보실 수 있습니다:\n"
@@ -347,5 +423,7 @@ class RocheBot:
             "• '응급실 운영하는 병원 알려줘'\n"
             "• '대전 약국 찾아줘'\n"
             "• '당번약국 알려줘'\n"
-            "• '등록된 병원 목록 보여줘'"
+            "• '등록된 병원 목록 보여줘'\n"
+            "• 'MRI 있는 병원 알려줘'\n"
+            "• '내과 전문의 있는 병원'"
         )

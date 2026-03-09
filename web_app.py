@@ -70,10 +70,12 @@ def _nearby_hospitals(lat: float, lon: float, radius_km: float) -> list[dict]:
                 "phone":     h.get("phone", ""),
                 "latitude":  hlat,
                 "longitude": hlon,
-                "emergency": h.get("emergency", False),
-                "is_open":   bool(status and status.get("is_open")),
-                "hours":     status.get("hours", "") if status else "",
-                "dist_km":   round(dist, 2),
+                "emergency":   h.get("emergency", False),
+                "is_open":     bool(status and status.get("is_open")),
+                "hours":       status.get("hours", "") if status else "",
+                "dist_km":     round(dist, 2),
+                "equipment":   h.get("equipment", []),
+                "specialists": h.get("specialists", {}),
             })
     return sorted(results, key=lambda x: x["dist_km"])
 

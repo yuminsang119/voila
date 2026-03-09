@@ -58,6 +58,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 37.5797,
         "longitude": 126.9990,
+        "equipment": ["CT", "MRI", "PET-CT", "X-ray", "초음파", "내시경", "심혈관조영술"],
+        "specialists": {"내과": 45, "외과": 30, "소아과": 15, "산부인과": 12, "신경과": 18, "응급의학과": 10},
     },
     {
         "id": "H00002",
@@ -75,6 +77,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 37.4881,
         "longitude": 127.0343,
+        "equipment": ["CT", "MRI", "PET-CT", "X-ray", "초음파", "내시경", "맘모그래피"],
+        "specialists": {"내과": 38, "외과": 25, "정형외과": 20, "피부과": 8, "안과": 12},
     },
     {
         "id": "H00003",
@@ -92,6 +96,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": False,
         "latitude": 37.5571,
         "longitude": 126.9242,
+        "equipment": ["X-ray", "초음파", "심전도"],
+        "specialists": {"내과": 1, "가정의학과": 1},
     },
     {
         "id": "H00004",
@@ -109,6 +115,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 37.5237,
         "longitude": 126.8963,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경"],
+        "specialists": {"내과": 12, "외과": 8, "신경외과": 5, "재활의학과": 6},
     },
     {
         "id": "H00005",
@@ -126,6 +134,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 37.5272,
         "longitude": 126.8699,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경", "맘모그래피"],
+        "specialists": {"산부인과": 10, "소아과": 8, "내과": 15, "외과": 10},
     },
     # ── 대전 ────────────────────────────────────────────────────
     {
@@ -144,6 +154,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3219,
         "longitude": 127.4089,
+        "equipment": ["CT", "MRI", "PET-CT", "X-ray", "초음파", "내시경", "심혈관조영술", "방사선치료기"],
+        "specialists": {"내과": 30, "외과": 20, "소아과": 12, "산부인과": 10, "신경과": 14, "응급의학과": 8, "정형외과": 15, "재활의학과": 8},
     },
     {
         "id": "H00102",
@@ -161,6 +173,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3028,
         "longitude": 127.3613,
+        "equipment": ["CT", "MRI", "PET-CT", "X-ray", "초음파", "내시경", "안과정밀장비"],
+        "specialists": {"내과": 22, "외과": 15, "소아과": 8, "안과": 10, "피부과": 6, "응급의학과": 7},
     },
     {
         "id": "H00103",
@@ -178,6 +192,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3259,
         "longitude": 127.4268,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경", "맘모그래피"],
+        "specialists": {"내과": 18, "외과": 12, "산부인과": 8, "소아과": 6, "정형외과": 10},
     },
     {
         "id": "H00104",
@@ -195,6 +211,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3505,
         "longitude": 127.3867,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경", "심혈관조영술"],
+        "specialists": {"내과": 20, "외과": 14, "신경과": 10, "재활의학과": 8, "응급의학과": 7},
     },
     {
         "id": "H00105",
@@ -212,6 +230,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3275,
         "longitude": 127.4219,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경"],
+        "specialists": {"내과": 15, "외과": 10, "정형외과": 12, "재활의학과": 7},
     },
     {
         "id": "H00106",
@@ -229,6 +249,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": True,
         "latitude": 36.3825,
         "longitude": 127.3385,
+        "equipment": ["CT", "MRI", "X-ray", "초음파", "내시경"],
+        "specialists": {"내과": 12, "외과": 8, "소아과": 5, "신경과": 7},
     },
     {
         "id": "H00107",
@@ -246,6 +268,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": False,
         "latitude": 36.3272,
         "longitude": 127.4276,
+        "equipment": ["한방초음파", "경락기능검사기", "적외선체열진단기"],
+        "specialists": {"한방내과": 2, "침구과": 3, "재활의학과": 1},
     },
     {
         "id": "H00108",
@@ -263,6 +287,8 @@ DUMMY_HOSPITALS: list[dict] = [
         "emergency": False,
         "latitude": 36.3534,
         "longitude": 127.3842,
+        "equipment": ["X-ray", "초음파", "심전도", "혈액검사기"],
+        "specialists": {"내과": 2, "가정의학과": 1},
     },
 ]
 
@@ -610,4 +636,6 @@ class HospitalInfoCollectorAgent:
             "latitude": float(item.get("YPos", 0) or 0),
             "longitude": float(item.get("XPos", 0) or 0),
             "hira_code": item.get("ykiho", ""),
+            "equipment": [],
+            "specialists": {},
         }

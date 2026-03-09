@@ -215,6 +215,42 @@
     .btn-map  { background: #ebf8ff; color: #2b6cb0; }
     .btn-call { background: #f0fff4; color: #276749; }
 
+    /* 장비·전문의 토글 영역 */
+    .detail-toggle {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: #3182ce;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .detail-toggle::before { content: '▶ '; font-size: 0.65rem; }
+    .detail-toggle.open::before { content: '▼ '; }
+    .detail-body {
+      display: none;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #edf2f7;
+    }
+    .detail-body.open { display: block; }
+    .detail-section { margin-bottom: 6px; }
+    .detail-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #718096;
+      margin-bottom: 4px;
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .chip-equip { background: #ebf8ff; color: #2b6cb0; }
+    .chip-spec  { background: #f0fff4; color: #276749; }
+
     /* ── 토스트 메시지 ─────────────────────────────── */
     #toast {
       position: fixed;
@@ -497,6 +533,21 @@ function render(data, label, myLat, myLon) {
     card.className = 'card';
     card.id = `card-${i}`;
     card.style.animationDelay = `${i * 45}ms`;
+    // 장비 칩
+    const eqChips = (item.equipment || [])
+      .map(e => `<span class="chip chip-equip">${e}</span>`).join('');
+
+    // 전문의 칩 (과목 전문의 N명)
+    const spChips = Object.entries(item.specialists || {})
+      .map(([sp, n]) => `<span class="chip chip-spec">${sp} ${n}명</span>`).join('');
+
+    const detailSection = (eqChips || spChips) ? `
+      <div class="detail-toggle" onclick="toggleDetail(this, event)">장비·전문의 보기</div>
+      <div class="detail-body">
+        ${eqChips ? `<div class="detail-section"><div class="detail-label">🩻 보유 장비</div><div class="chip-row">${eqChips}</div></div>` : ''}
+        ${spChips ? `<div class="detail-section"><div class="detail-label">👨‍⚕️ 전문의</div><div class="chip-row">${spChips}</div></div>` : ''}
+      </div>` : '';
+
     card.innerHTML = `
       <div class="card-top">
         <div>
@@ -509,6 +560,7 @@ function render(data, label, myLat, myLon) {
         <span>⏰ ${item.hours || '-'}</span>
         ${item.phone ? `<span>📞 ${item.phone}</span>` : ''}
       </div>
+      ${detailSection}
       ${(item.latitude || item.phone) ? `
       <div class="card-actions">
         ${item.latitude ? `<a href="${mapUrl}" target="_blank" class="btn-map" onclick="event.stopPropagation()">🗺 지도 보기</a>` : ''}
@@ -526,6 +578,15 @@ function render(data, label, myLat, myLon) {
   // 바텀시트 슬라이드 업
   setTimeout(openSheet, 120);
   toast(`${data.items.length}개 ${label}을 찾았어요!`);
+}
+
+// ── 장비·전문의 토글 ──────────────────────────────────────────────────
+function toggleDetail(btn, e) {
+  e.stopPropagation();
+  const body = btn.nextElementSibling;
+  const open = body.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '장비·전문의 접기' : '장비·전문의 보기';
 }
 
 // ── 카드 → 지도 포커스 ───────────────────────────────────────────────
