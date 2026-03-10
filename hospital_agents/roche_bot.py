@@ -80,7 +80,7 @@ INTENTS: list[dict] = [
     {
         "name": "find_by_equipment",
         "patterns": [
-            r"(MRI|CT|PET|초음파|내시경|맘모그래피|X-ray|엑스레이|방사선|심혈관조영|체열진단).*(있는|가능|검사|되는)",
+            r"(MRI|CT|PET|후두내시경|초음파|내시경|맘모그래피|X-ray|엑스레이|방사선|심혈관조영|체열진단).*(있는|가능|검사|되는)",
             r"(의료|검사)\s*(장비|기기)",
             r"장비\s*(보유|있는|검색)",
         ],
@@ -89,7 +89,7 @@ INTENTS: list[dict] = [
         "name": "find_by_specialist",
         "patterns": [
             r"전문의\s*(있는|몇\s*명|수|검색)",
-            r"(내과|외과|정형외과|소아과|산부인과|피부과|안과|신경과|재활의학과|응급의학과|가정의학과).*(전문의|의사|몇\s*명)",
+            r"(내과|외과|정형외과|소아과|산부인과|피부과|안과|신경과|이비인후과|재활의학과|응급의학과|가정의학과).*(전문의|의사|몇\s*명)",
             r"전문의\s*(내과|외과|정형외과|소아과)",
         ],
     },
@@ -188,14 +188,14 @@ class RocheBot:
                     break
 
         # 장비 추출
-        equip_keywords = ["MRI", "CT", "PET-CT", "초음파", "내시경", "맘모그래피", "X-ray", "엑스레이", "심혈관조영술", "방사선치료기", "체열진단기"]
+        equip_keywords = ["MRI", "CT", "PET-CT", "후두내시경", "초음파", "내시경", "맘모그래피", "X-ray", "엑스레이", "심혈관조영술", "방사선치료기", "체열진단기"]
         for eq in equip_keywords:
             if eq in text or eq.replace("-", "") in text:
                 entities["equipment"] = eq
                 break
 
         # 진료과 추출
-        specialties = ["내과", "외과", "소아과", "산부인과", "정형외과", "피부과", "안과", "신경과", "재활의학과", "응급의학과", "가정의학과"]
+        specialties = ["내과", "외과", "소아과", "산부인과", "정형외과", "피부과", "안과", "신경과", "이비인후과", "재활의학과", "응급의학과", "가정의학과"]
         for sp in specialties:
             if sp in text:
                 entities["specialty"] = sp
