@@ -195,6 +195,7 @@
       line-height: 1.7;
     }
     .card-meta span { display: block; }
+    .card-meta a { color: #276749; text-decoration: none; font-weight: 600; }
 
     .card-actions {
       display: flex;
@@ -251,6 +252,61 @@
     .chip-equip { background: #ebf8ff; color: #2b6cb0; }
     .chip-spec  { background: #f0fff4; color: #276749; }
 
+    /* ── 바텀시트 필터 바 ──────────────────────────── */
+    .filter-bar {
+      flex-shrink: 0;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px 10px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-bar.visible { display: flex; }
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid #e2e8f0;
+      background: white;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #4a5568;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .filter-chip.active {
+      background: #2b6cb0;
+      border-color: #2b6cb0;
+      color: white;
+    }
+    .filter-chip.active.emg  { background: #c53030; border-color: #c53030; }
+    .filter-chip.active.duty { background: #b7791f; border-color: #b7791f; }
+
+    /* ── 0건 결과 안내 ─────────────────────────────── */
+    .empty-state {
+      padding: 24px 16px;
+      text-align: center;
+      color: #718096;
+    }
+    .empty-state p { font-size: 0.88rem; margin-bottom: 14px; line-height: 1.6; }
+    .btn-expand {
+      display: inline-block;
+      padding: 10px 22px;
+      background: #3182ce;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-expand:active { opacity: .8; }
+
     /* ── 토스트 메시지 ─────────────────────────────── */
     #toast {
       position: fixed;
@@ -272,6 +328,39 @@
     #toast.show {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
+    }
+    /* 재시도 토스트 (위치 오류용) */
+    #retryToast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(26,32,44,.95);
+      color: white;
+      padding: 11px 16px;
+      border-radius: 14px;
+      font-size: 0.82rem;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 500;
+      max-width: 88vw;
+      text-align: center;
+      line-height: 1.5;
+      transition: opacity .25s, transform .25s;
+    }
+    #retryToast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #retryToast button {
+      margin-top: 8px;
+      display: block;
+      width: 100%;
+      padding: 7px;
+      border: none;
+      border-radius: 8px;
+      background: #3182ce;
+      color: white;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
     }
 
     /* ── 스피너 ───────────────────────────────────── */
@@ -351,10 +440,17 @@
     <span class="sheet-title" id="sheetTitle">검색 결과</span>
     <span class="sheet-sub"   id="sheetSub"></span>
   </div>
+  <!-- 필터 바 -->
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-chip" id="chipOpen"  onclick="toggleFilter('open')">영업중만</button>
+    <button class="filter-chip" id="chipEmg"   onclick="toggleFilter('emg')">🚨 응급실</button>
+    <button class="filter-chip" id="chipDuty"  onclick="toggleFilter('duty')">🌙 야간·당번</button>
+  </div>
   <div class="sheet-body" id="sheetBody"></div>
 </div>
 
 <div id="toast"></div>
+<div id="retryToast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -370,10 +466,15 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 L.control.zoom({ position: 'topright' }).addTo(map);
 
 // ── 상태 ───────────────────────────────────────────────────────────────
-let radiusKm   = 3;
-let myMarker   = null;
-let markers    = {};   // cardIndex → L.Marker
-let toastTimer = null;
+let radiusKm      = 3;
+let myMarker      = null;
+let markers       = {};   // cardIndex → L.Marker
+let toastTimer    = null;
+let retryTimer    = null;
+let lastSearchKind = null;  // 마지막 검색 종류 (hospital / pharmacy)
+let lastPos        = null;  // 마지막 위치 {lat, lon}
+let allItems       = [];    // 현재 결과 전체
+let activeFilters  = new Set();  // 활성 필터 집합
 
 // ── 토스트 ────────────────────────────────────────────────────────────
 function toast(msg, ms = 2600) {
@@ -384,12 +485,54 @@ function toast(msg, ms = 2600) {
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
+// 위치 오류 전용 재시도 토스트 (버튼 포함)
+function showRetryToast(msg) {
+  const el = document.getElementById('retryToast');
+  el.innerHTML = `${msg}<button onclick="hideRetryToast(); search(lastSearchKind || 'hospital')">🔄 다시 시도</button>`;
+  el.classList.add('show');
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(hideRetryToast, 8000);
+}
+function hideRetryToast() {
+  document.getElementById('retryToast').classList.remove('show');
+}
+
 // ── 반경 선택 ─────────────────────────────────────────────────────────
 function setRadius(km) {
   radiusKm = km;
   document.querySelectorAll('#radiusBtns button').forEach(b =>
     b.classList.toggle('active', b.textContent.trim() === km + ' km')
   );
+  // 이전 검색이 있으면 즉시 재검색
+  if (lastSearchKind && lastPos) {
+    activeFilters.clear();
+    updateFilterChips();
+    fetchNearby(lastPos.lat, lastPos.lon, lastSearchKind);
+  }
+}
+
+// ── 필터 토글 ─────────────────────────────────────────────────────────
+function toggleFilter(key) {
+  if (activeFilters.has(key)) activeFilters.delete(key);
+  else activeFilters.add(key);
+  updateFilterChips();
+  applyFilters();
+}
+
+function updateFilterChips() {
+  document.getElementById('chipOpen').classList.toggle('active', activeFilters.has('open'));
+  document.getElementById('chipEmg').classList.toggle('active', activeFilters.has('emg'));
+  document.getElementById('chipDuty').classList.toggle('active', activeFilters.has('duty'));
+  document.getElementById('chipEmg').classList.toggle('emg', activeFilters.has('emg'));
+  document.getElementById('chipDuty').classList.toggle('duty', activeFilters.has('duty'));
+}
+
+function applyFilters() {
+  let items = allItems;
+  if (activeFilters.has('open'))  items = items.filter(x => x.is_open);
+  if (activeFilters.has('emg'))   items = items.filter(x => x.emergency);
+  if (activeFilters.has('duty'))  items = items.filter(x => x.duty_pharmacy || x.emergency);
+  renderCards(items);
 }
 
 // ── 바텀시트 토글 ─────────────────────────────────────────────────────
@@ -443,6 +586,8 @@ function makePin(bg, emoji) {
 
 // ── 검색 ─────────────────────────────────────────────────────────────
 function search(kind) {
+  lastSearchKind = kind;
+  hideRetryToast();
   toast('<span class="spinner"></span>위치 정보를 가져오는 중...', 10000);
 
   if (!navigator.geolocation) {
@@ -453,17 +598,18 @@ function search(kind) {
     pos => fetchNearby(pos.coords.latitude, pos.coords.longitude, kind),
     err => {
       const m = {
-        1: '⚠️ 위치 허용을 거부하셨습니다. 브라우저 설정에서 허용해 주세요.',
+        1: '주소창 왼쪽 자물쇠 아이콘을 눌러 위치 권한을 허용해 주세요.',
         2: '⚠️ 위치를 가져오지 못했습니다.',
         3: '⚠️ 위치 요청 시간이 초과되었습니다.',
       };
-      toast(m[err.code] || '⚠️ 알 수 없는 오류');
+      showRetryToast(m[err.code] || '⚠️ 알 수 없는 오류');
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
 }
 
 async function fetchNearby(lat, lon, kind) {
+  lastPos = { lat, lon };
   const label = kind === 'hospital' ? '병원' : '약국';
   toast(`<span class="spinner"></span>반경 ${radiusKm}km ${label} 검색 중...`, 10000);
 
@@ -487,57 +633,85 @@ function render(data, label, myLat, myLon) {
   // 이전 마커 제거
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
+  activeFilters.clear();
+  updateFilterChips();
+
+  const isHosp = label === '병원';
 
   if (!data.items || data.items.length === 0) {
-    toast(`반경 ${radiusKm}km 이내에 ${label}이 없습니다. 반경을 넓혀보세요.`);
-    closeSheet();
+    // 0건 → 바텀시트에 반경 확대 제안 표시
+    const radii = [1, 3, 5, 10];
+    const nextRadius = radii.find(r => r > radiusKm);
+    document.getElementById('sheetTitle').textContent = `검색 결과 없음`;
+    document.getElementById('sheetSub').textContent   = `반경 ${radiusKm}km · ${label}`;
+    document.getElementById('filterBar').classList.remove('visible');
+    const body = document.getElementById('sheetBody');
+    body.innerHTML = `<div class="empty-state">
+      <p>반경 ${radiusKm}km 이내에<br>${label}이 없습니다.</p>
+      ${nextRadius ? `<button class="btn-expand" onclick="expandAndSearch(${nextRadius})">반경 ${nextRadius}km로 확대해서 찾기</button>` : '<p>반경을 최대로 늘렸지만 결과가 없습니다.</p>'}
+    </div>`;
+    setTimeout(openSheet, 120);
     return;
   }
 
-  const isHosp = label === '병원';
+  // 전체 데이터 저장 (필터용)
+  allItems = data.items;
+
   document.getElementById('sheetTitle').textContent = `${label} ${data.items.length}건`;
   document.getElementById('sheetSub').textContent   = `가까운 순 · 반경 ${radiusKm}km`;
+  document.getElementById('filterBar').classList.add('visible');
 
-  const body   = document.getElementById('sheetBody');
-  body.innerHTML = '';
+  // 지도 핀 렌더링
   const bounds = [[myLat, myLon]];
-
   data.items.forEach((item, i) => {
     const color = item.is_open
       ? (isHosp ? '#3182ce' : '#38a169')
       : '#a0aec0';
     const emoji = isHosp ? '🏥' : '💊';
-
-    // ── 지도 핀 ────────────────────────────────────────────────
     if (item.latitude && item.longitude) {
       const mk = L.marker([item.latitude, item.longitude], { icon: makePin(color, emoji) })
         .addTo(map)
         .bindPopup(`<b>${item.name}</b><br>${item.dist_km} km`);
-
       mk.on('click', () => scrollToCard(i));
       markers[i] = mk;
       bounds.push([item.latitude, item.longitude]);
     }
+  });
 
-    // ── 카드 ──────────────────────────────────────────────────
-    const openBadge = item.is_open
-      ? '<span class="badge badge-open">✅ 영업중</span>'
-      : '<span class="badge badge-closed">❌ 휴진</span>';
-    const emgBadge  = item.emergency      ? '<span class="badge badge-emg">🚨응급</span>'  : '';
-    const dutyBadge = item.duty_pharmacy  ? '<span class="badge badge-duty">🌙당번</span>' : '';
+  renderCards(data.items);
 
+  // 결과 전체가 보이도록 지도 범위 조정
+  map.fitBounds(bounds, { padding: [70, 70], maxZoom: 15 });
+
+  // 바텀시트 슬라이드 업
+  setTimeout(openSheet, 120);
+  toast(`${data.items.length}개 ${label}을 찾았어요!`);
+}
+
+// ── 카드 목록 렌더링 (필터 후 재호출 가능) ────────────────────────────
+function renderCards(items) {
+  const isHosp = lastSearchKind === 'hospital';
+  const body = document.getElementById('sheetBody');
+  body.innerHTML = '';
+
+  if (items.length === 0) {
+    body.innerHTML = '<div class="empty-state"><p>조건에 맞는 결과가 없습니다.<br>필터를 해제해 보세요.</p></div>';
+    return;
+  }
+
+  items.forEach((item, i) => {
+    const origIdx = allItems.indexOf(item);
     const mapUrl  = `https://map.kakao.com/link/map/${encodeURIComponent(item.name)},${item.latitude},${item.longitude}`;
     const callUrl = item.phone ? `tel:${item.phone.replace(/-/g, '')}` : '#';
 
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.id = `card-${i}`;
-    card.style.animationDelay = `${i * 45}ms`;
-    // 장비 칩
+    const openBadge = item.is_open
+      ? '<span class="badge badge-open">✅ 영업중</span>'
+      : '<span class="badge badge-closed">❌ 휴진</span>';
+    const emgBadge  = item.emergency     ? '<span class="badge badge-emg">🚨응급</span>'  : '';
+    const dutyBadge = item.duty_pharmacy ? '<span class="badge badge-duty">🌙당번</span>' : '';
+
     const eqChips = (item.equipment || [])
       .map(e => `<span class="chip chip-equip">${e}</span>`).join('');
-
-    // 전문의 칩 (과목 전문의 N명)
     const spChips = Object.entries(item.specialists || {})
       .map(([sp, n]) => `<span class="chip chip-spec">${sp} ${n}명</span>`).join('');
 
@@ -548,6 +722,10 @@ function render(data, label, myLat, myLon) {
         ${spChips ? `<div class="detail-section"><div class="detail-label">👨‍⚕️ 전문의</div><div class="chip-row">${spChips}</div></div>` : ''}
       </div>` : '';
 
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `card-${origIdx}`;
+    card.style.animationDelay = `${i * 45}ms`;
     card.innerHTML = `
       <div class="card-top">
         <div>
@@ -558,7 +736,7 @@ function render(data, label, myLat, myLon) {
       <div class="card-meta">
         <span>📍 ${item.address || '-'}</span>
         <span>⏰ ${item.hours || '-'}</span>
-        ${item.phone ? `<span>📞 ${item.phone}</span>` : ''}
+        ${item.phone ? `<span>📞 <a href="${callUrl}" onclick="event.stopPropagation()">${item.phone}</a></span>` : ''}
       </div>
       ${detailSection}
       ${(item.latitude || item.phone) ? `
@@ -567,17 +745,18 @@ function render(data, label, myLat, myLon) {
         ${item.phone    ? `<a href="${callUrl}" class="btn-call" onclick="event.stopPropagation()">📞 전화하기</a>` : ''}
       </div>` : ''}`;
 
-    // 카드 탭 → 지도에서 해당 위치로 이동
-    card.addEventListener('click', () => flyTo(i, item));
+    card.addEventListener('click', () => flyTo(origIdx, item));
     body.appendChild(card);
   });
+}
 
-  // 결과 전체가 보이도록 지도 범위 조정
-  map.fitBounds(bounds, { padding: [70, 70], maxZoom: 15 });
-
-  // 바텀시트 슬라이드 업
-  setTimeout(openSheet, 120);
-  toast(`${data.items.length}개 ${label}을 찾았어요!`);
+// ── 반경 확대 후 재검색 ────────────────────────────────────────────────
+function expandAndSearch(km) {
+  radiusKm = km;
+  document.querySelectorAll('#radiusBtns button').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === km + ' km')
+  );
+  if (lastPos) fetchNearby(lastPos.lat, lastPos.lon, lastSearchKind);
 }
 
 // ── 장비·전문의 토글 ──────────────────────────────────────────────────
